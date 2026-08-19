@@ -264,12 +264,45 @@
       return mimeType ? { mimeType } : undefined;
     }
 
+    async function requestMicrophoneStream(constraints) {
+      const mediaPromise = navigator.mediaDevices.getUserMedia(constraints);
+      let timedOut = false;
+      let timeoutId = null;
+      const timeoutPromise = new Promise((_, reject) => {
+        timeoutId = setTimeout(() => {
+          timedOut = true;
+          const error = new Error("Microphone permission timed out");
+          error.name = "TimeoutError";
+          reject(error);
+        }, 10000);
+      });
+      try {
+        return await Promise.race([mediaPromise, timeoutPromise]);
+      } finally {
+        clearTimeout(timeoutId);
+        if (timedOut) {
+          mediaPromise.then(
+            stream => stream.getTracks().forEach(track => track.stop()),
+            () => {},
+          );
+        }
+      }
+    }
+
     async function startRecording() {
       setStatus("Connecting…");
       const constraints = microphoneSelect.value
         ? { audio: { deviceId: { exact: microphoneSelect.value }, echoCancellation: true } }
         : { audio: { echoCancellation: true } };
-      mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      const permissionHintTimer = setTimeout(
+        () => setStatus("Please allow microphone access in the browser…"),
+        2000,
+      );
+      try {
+        mediaStream = await requestMicrophoneStream(constraints);
+      } finally {
+        clearTimeout(permissionHintTimer);
+      }
       await refreshMicrophones(false);
       websocket = new WebSocket(websocketUrl());
       websocket.onmessage = event => {
@@ -331,7 +364,13 @@
         recording = false;
         recordButton.textContent = "Start";
         recordButton.classList.remove("recording");
-        setStatus("Microphone or server unavailable");
+        if (error?.name === "NotAllowedError") {
+          setStatus("Microphone blocked — allow access, then click Start again");
+        } else if (error?.name === "TimeoutError") {
+          setStatus("Microphone permission timed out — allow access, then retry");
+        } else {
+          setStatus("Microphone or server unavailable");
+        }
       } finally {
         recordButton.disabled = false;
       }
@@ -343,8 +382,13 @@
     fontSize.addEventListener("input", () => {
       document.documentElement.style.setProperty("--subtitle-size", `${fontSize.value}px`);
     });
-    navigator.mediaDevices?.addEventListener?.("devicechange", () => refreshMicrophones(false));
-    refreshMicrophones(false).catch(() => {});
+    if (location.protocol === "file:") {
+      recordButton.disabled = true;
+      setStatus("Start the server, then open the Conference URL printed in Terminal");
+    } else {
+      navigator.mediaDevices?.addEventListener?.("devicechange", () => refreshMicrophones(false));
+      refreshMicrophones(false).catch(() => {});
+    }
   </script>
 </body>
 </html>

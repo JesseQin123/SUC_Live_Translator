@@ -17,4 +17,5 @@ exec "$WLK_BIN" \
     --language auto \
     --conference-mode \
     --pause-segmentation-seconds 0.8 \
+    --port 8764 \
     "$@"

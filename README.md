@@ -90,7 +90,7 @@ Start the local server:
 ./scripts/conference.sh
 ```
 
-Then open [http://localhost:8000/conference](http://localhost:8000/conference),
+Then open [http://localhost:8764/conference](http://localhost:8764/conference),
 choose a microphone, and click **Start**. The first start downloads and caches
 the open model weights; later starts can run offline.
 
@@ -100,7 +100,8 @@ speaker handoff gives the clearest split between subtitle turns.
 
 The conference page expects the normal MediaRecorder input mode, so do not add
 `--pcm-input`. Add normal server arguments after the script name when needed,
-for example `./scripts/conference.sh --port 9000`.
+for example `./scripts/conference.sh --port 9000`. Do not open `conference.html`
+directly from Finder; the page must be served by the local conference server.
 
 #### API Compatibility
 

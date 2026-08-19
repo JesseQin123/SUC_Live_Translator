@@ -79,3 +79,5 @@ def test_conference_ui_contains_three_tracks_and_meeting_controls():
     assert "/conference/translate" in html
     assert "function latestPhrase" in html
     assert "function detectLanguage" not in html
+    assert "Microphone permission timed out" in html
+    assert "open the Conference URL printed in Terminal" in html
