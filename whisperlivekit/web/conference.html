@@ -3,120 +3,323 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Conference Translation</title>
+  <title>SUC Live Translator</title>
   <style>
     :root {
       color-scheme: dark;
-      --bg: #080b10;
-      --panel: #10151d;
-      --line: #29313d;
-      --muted: #91a0b4;
-      --text: #f7f9fc;
-      --accent: #72e0b3;
+      --bg: #070707;
+      --panel: #111111;
+      --panel-strong: #171717;
+      --line: #2b2b2b;
+      --line-soft: #1d1d1d;
+      --muted: #949494;
+      --text: #f7f7f5;
+      --accent: #ff6b00;
+      --accent-bright: #ff7a1a;
+      --danger: #ff4f4f;
       --subtitle-size: 42px;
     }
     * { box-sizing: border-box; }
+    html { background: var(--bg); }
     body {
       margin: 0;
       min-height: 100vh;
-      background: radial-gradient(circle at top, #16202b 0, var(--bg) 44%);
+      background:
+        radial-gradient(circle at 12% -20%, rgba(255, 107, 0, .14), transparent 34%),
+        var(--bg);
       color: var(--text);
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      -webkit-font-smoothing: antialiased;
     }
-    .app { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+    button, select, input { font: inherit; }
+    .app { min-height: 100vh; display: grid; grid-template-rows: auto 1fr auto; }
     header {
+      position: relative;
+      z-index: 2;
+      display: grid;
+      grid-template-columns: minmax(310px, 1fr) auto;
+      align-items: center;
+      gap: 28px;
+      padding: 15px clamp(18px, 3vw, 44px);
+      border-bottom: 1px solid var(--line);
+      background: rgba(7, 7, 7, .88);
+      backdrop-filter: blur(18px);
+    }
+    .brand {
+      min-width: 0;
       display: flex;
       align-items: center;
-      gap: 12px;
-      padding: 14px 18px;
-      border-bottom: 1px solid var(--line);
-      background: rgba(8, 11, 16, .82);
-      backdrop-filter: blur(16px);
+      gap: clamp(14px, 2vw, 24px);
     }
-    .brand { margin-right: auto; font-weight: 720; letter-spacing: .02em; }
+    .brand-logo {
+      display: block;
+      width: clamp(178px, 17vw, 238px);
+      height: auto;
+      flex: 0 0 auto;
+    }
+    .product-name {
+      padding-left: clamp(14px, 2vw, 24px);
+      border-left: 1px solid #3a3a3a;
+      min-width: 0;
+    }
+    .product-name strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.1;
+      letter-spacing: .18em;
+      white-space: nowrap;
+    }
+    .product-name span {
+      display: block;
+      margin-top: 6px;
+      color: var(--muted);
+      font-size: 11px;
+      letter-spacing: .045em;
+      white-space: nowrap;
+    }
+    .controls {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+    }
     select, button, input {
       color: var(--text);
-      background: #18202b;
-      border: 1px solid #354052;
-      border-radius: 10px;
-      min-height: 40px;
+      background: #151515;
+      border: 1px solid #353535;
+      border-radius: 8px;
+      min-height: 44px;
     }
-    select { max-width: 260px; padding: 0 12px; }
-    button { padding: 0 16px; font-weight: 650; cursor: pointer; }
-    button.primary { background: var(--accent); color: #04150e; border-color: transparent; }
-    button.primary.recording { background: #ff7d88; color: #260308; }
-    .font-control { display: flex; align-items: center; gap: 8px; color: var(--muted); }
-    #font-size { width: 110px; min-height: 0; }
-    main { display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); min-height: 0; }
-    .track {
-      display: grid;
-      grid-template-columns: minmax(92px, 11vw) 1fr;
+    select { max-width: 230px; padding: 0 34px 0 12px; }
+    button {
+      padding: 0 15px;
+      font-weight: 680;
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease, transform .15s ease;
+    }
+    button:hover:not(:disabled) { background: #222; border-color: #505050; }
+    button:active:not(:disabled) { transform: translateY(1px); }
+    button:focus-visible, select:focus-visible, input:focus-visible {
+      outline: 3px solid rgba(255, 107, 0, .3);
+      outline-offset: 2px;
+    }
+    button:disabled { cursor: wait; opacity: .62; }
+    button.primary {
+      position: relative;
+      min-width: 88px;
+      padding-left: 34px;
+      color: #110700;
+      background: var(--accent);
+      border-color: var(--accent);
+    }
+    button.primary::before {
+      content: "";
+      position: absolute;
+      left: 15px;
+      top: 50%;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: currentColor;
+      transform: translateY(-50%);
+    }
+    button.primary:hover:not(:disabled) { background: var(--accent-bright); border-color: var(--accent-bright); }
+    button.primary.recording { background: var(--danger); border-color: var(--danger); color: #170000; }
+    button.primary.recording::before { animation: pulse 1.3s ease-out infinite; }
+    .font-control {
+      display: flex;
       align-items: center;
-      gap: clamp(16px, 3vw, 48px);
-      padding: clamp(18px, 3vh, 42px) clamp(22px, 5vw, 76px);
-      border-bottom: 1px solid var(--line);
-      background: linear-gradient(90deg, rgba(255,255,255,.025), transparent 55%);
+      gap: 8px;
+      min-height: 44px;
+      padding: 0 11px;
+      color: var(--muted);
+      background: #111;
+      border: 1px solid #303030;
+      border-radius: 8px;
+      font-size: 12px;
     }
-    .track:last-child { border-bottom: 0; }
-    .track.active { background: linear-gradient(90deg, rgba(114,224,179,.09), transparent 60%); }
-    .language { align-self: start; padding-top: 9px; color: var(--muted); font-size: 15px; font-weight: 750; letter-spacing: .08em; }
+    #font-size { width: 76px; min-height: 0; accent-color: var(--accent); }
+    main {
+      display: grid;
+      grid-template-rows: repeat(3, minmax(0, 1fr));
+      gap: 1px;
+      min-height: 0;
+      padding: 1px 0;
+      background: var(--line-soft);
+    }
+    .track {
+      position: relative;
+      display: grid;
+      grid-template-columns: minmax(118px, 13vw) 1fr;
+      align-items: center;
+      gap: clamp(22px, 4vw, 64px);
+      padding: clamp(24px, 3.4vh, 48px) clamp(24px, 5vw, 78px);
+      overflow: hidden;
+      background: var(--panel);
+      isolation: isolate;
+    }
+    .track::after {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 4px;
+      background: var(--accent);
+      opacity: 0;
+      transform: scaleY(.25);
+      transition: opacity .2s ease, transform .2s ease;
+    }
+    .track.active {
+      background:
+        linear-gradient(90deg, rgba(255, 107, 0, .09), transparent 30%),
+        var(--panel-strong);
+    }
+    .track.active::after { opacity: 1; transform: scaleY(1); }
+    .language {
+      align-self: start;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      padding-top: 8px;
+      color: #b0b0b0;
+      font-size: 13px;
+      font-weight: 760;
+      letter-spacing: .14em;
+    }
+    .language-native {
+      color: var(--text);
+      font-size: clamp(18px, 1.5vw, 23px);
+      font-weight: 720;
+      letter-spacing: -.015em;
+    }
+    .source-badge {
+      display: none;
+      width: max-content;
+      padding: 4px 7px;
+      border: 1px solid rgba(255, 107, 0, .45);
+      border-radius: 4px;
+      color: var(--accent-bright);
+      font-size: 9px;
+      letter-spacing: .16em;
+    }
+    .track.active .source-badge { display: inline-block; }
     .subtitle {
       font-size: var(--subtitle-size);
-      line-height: 1.28;
-      font-weight: 650;
-      letter-spacing: -.018em;
-      text-wrap: balance;
+      line-height: 1.22;
+      font-weight: 610;
+      letter-spacing: -.025em;
       overflow-wrap: anywhere;
     }
-    .subtitle.empty { color: #596579; font-weight: 520; }
-    .partial { color: #aeb9c9; font-weight: 520; }
-    .status {
-      position: fixed;
-      right: 18px;
-      bottom: 14px;
-      padding: 7px 10px;
-      border-radius: 8px;
-      color: var(--muted);
-      background: rgba(5, 8, 12, .75);
-      font-size: 13px;
+    .subtitle.empty { color: #555; font-weight: 500; }
+    .partial { color: #969696; font-weight: 500; }
+    footer {
+      min-height: 34px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 6px clamp(18px, 3vw, 44px);
+      border-top: 1px solid var(--line);
+      color: #6f6f6f;
+      background: #090909;
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: .13em;
+      text-transform: uppercase;
     }
-    @media (max-width: 760px) {
-      header { flex-wrap: wrap; }
-      .brand { width: 100%; }
-      .track { grid-template-columns: 1fr; gap: 5px; }
-      .language { padding-top: 0; }
-      .subtitle { font-size: min(var(--subtitle-size), 8vw); }
+    .status { display: flex; align-items: center; gap: 8px; color: #a2a2a2; letter-spacing: .04em; text-transform: none; }
+    .status::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 0 4px rgba(255, 107, 0, .11);
+    }
+    @keyframes pulse {
+      0% { box-shadow: 0 0 0 0 rgba(23, 0, 0, .55); }
+      70%, 100% { box-shadow: 0 0 0 7px rgba(23, 0, 0, 0); }
+    }
+    @media (max-width: 980px) {
+      header { grid-template-columns: 1fr; gap: 13px; }
+      .controls { justify-content: stretch; }
+      select { min-width: 0; max-width: none; flex: 1 1 180px; }
+      main { min-height: 720px; }
+    }
+    @media (max-width: 680px) {
+      .app { display: block; }
+      header { position: sticky; top: 0; padding: 13px 15px; }
+      .brand-logo { width: 174px; }
+      .product-name strong { font-size: 11px; }
+      .product-name span { display: none; }
+      .controls { display: grid; grid-template-columns: 1fr auto auto; }
+      .font-control { display: none; }
+      #fullscreen-button { padding-inline: 12px; }
+      main { display: block; min-height: 0; padding: 0; }
+      .track {
+        min-height: 235px;
+        grid-template-columns: 1fr;
+        align-content: center;
+        gap: 15px;
+        padding: 25px 22px 31px;
+        border-bottom: 1px solid var(--line-soft);
+      }
+      .language { padding-top: 0; flex-direction: row; align-items: center; }
+      .language-native { font-size: 17px; }
+      .subtitle { font-size: min(var(--subtitle-size), 8.2vw); line-height: 1.28; }
+      footer { position: static; padding-inline: 15px; }
+      footer > span:first-child { display: none; }
+    }
+    @media (max-width: 440px) {
+      .brand-logo { width: 148px; }
+      .product-name { padding-left: 11px; }
+      .product-name strong { letter-spacing: .12em; }
+      .controls { grid-template-columns: 1fr auto; }
+      #fullscreen-button { display: none; }
     }
     :fullscreen header { opacity: .13; transition: opacity .2s; }
     :fullscreen header:hover { opacity: 1; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .01ms !important; transition-duration: .01ms !important; }
+    }
   </style>
 </head>
 <body>
   <div class="app">
     <header>
-      <div class="brand">Local Conference Translation</div>
-      <select id="microphone-select" aria-label="Microphone">
-        <option value="">Default microphone</option>
-      </select>
-      <label class="font-control">A <input id="font-size" type="range" min="26" max="72" value="42" /> A+</label>
-      <button id="fullscreen-button" type="button">Fullscreen</button>
-      <button id="record-button" class="primary" type="button">Start</button>
+      <div class="brand" aria-label="Solo Unicorn Club — SUC Live Translator">
+        <img class="brand-logo" src="{{SUC_LOGO_DATA_URI}}" alt="Solo Unicorn Club" />
+        <div class="product-name">
+          <strong>LIVE TRANSLATOR</strong>
+          <span>中文 · ENGLISH · 日本語</span>
+        </div>
+      </div>
+      <div class="controls">
+        <select id="microphone-select" aria-label="Microphone">
+          <option value="">Default microphone</option>
+        </select>
+        <label class="font-control" aria-label="Subtitle size">A <input id="font-size" type="range" min="26" max="72" value="42" /> A+</label>
+        <button id="fullscreen-button" type="button">Fullscreen</button>
+        <button id="record-button" class="primary" type="button">Start</button>
+      </div>
     </header>
     <main>
       <section class="track" id="track-zh">
-        <div class="language">中文</div>
+        <div class="language"><span class="language-native">中文</span><span>CHINESE</span><span class="source-badge">SOURCE</span></div>
         <div class="subtitle empty" id="subtitle-zh">等待发言…</div>
       </section>
       <section class="track" id="track-en">
-        <div class="language">ENGLISH</div>
+        <div class="language"><span class="language-native">English</span><span>ENGLISH</span><span class="source-badge">SOURCE</span></div>
         <div class="subtitle empty" id="subtitle-en">Waiting for speech…</div>
       </section>
       <section class="track" id="track-ja">
-        <div class="language">日本語</div>
+        <div class="language"><span class="language-native">日本語</span><span>JAPANESE</span><span class="source-badge">SOURCE</span></div>
         <div class="subtitle empty" id="subtitle-ja">発言を待っています…</div>
       </section>
     </main>
-    <div class="status" id="status">Ready</div>
+    <footer>
+      <span>Local · Private · On device</span>
+      <span class="status" id="status" role="status" aria-live="polite">Ready</span>
+    </footer>
   </div>
   <script>
     const languages = ["zh", "en", "ja"];

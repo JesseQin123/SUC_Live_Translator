@@ -22,10 +22,18 @@ def get_web_interface_html():
 
 
 def get_conference_ui_html():
-    """Load the self-contained three-language conference interface."""
-    return _load_html_resource(
+    """Load the self-contained branded three-language conference interface."""
+    html = _load_html_resource(
         "conference.html", "Error loading conference interface"
     )
+    try:
+        logo = resources.files("whisperlivekit.web").joinpath("suc-logo.png").read_bytes()
+        logo_uri = f"data:image/png;base64,{base64.b64encode(logo).decode('ascii')}"
+    except Exception as exc:
+        logger.error("Error loading SUC logo: %s", exc)
+        logo_uri = ""
+    return html.replace("{{SUC_LOGO_DATA_URI}}", logo_uri)
+
 
 def get_inline_ui_html():
     """Returns the complete web interface HTML with all assets embedded in a single call."""

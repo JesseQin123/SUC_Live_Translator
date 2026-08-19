@@ -1,26 +1,44 @@
 <p align="center">
-  <img width="330" alt="wlk" src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/wlk.png" />
+  <img width="680" alt="Solo Unicorn Club" src="whisperlivekit/web/suc-logo.png" />
 </p>
-<p align="center"><b>WLK: Ultra-low-latency, self-hosted speech-to-text pipeline</b></p>
-
+<h1 align="center">SUC Live Translator</h1>
+<p align="center"><b>Private, on-device Chinese · English · Japanese conference translation</b></p>
 
 <p align="center">
-<img src="https://raw.githubusercontent.com/QuentinFuxa/WhisperLiveKit/refs/heads/main/demo.png" alt="WhisperLiveKit Demo" width="730">
+<img alt="Local" src="https://img.shields.io/badge/processing-local-ff6b00">
+<img alt="Languages" src="https://img.shields.io/badge/languages-ZH%20%7C%20EN%20%7C%20JA-111111">
+<img alt="Apple Silicon" src="https://img.shields.io/badge/Apple%20Silicon-ready-111111">
+<a href="https://github.com/JesseQin123/SUC_Live_Translator/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache%202.0-555555"></a>
 </p>
 
+SUC Live Translator turns one Mac into a shared conference subtitle screen. It
+detects Chinese, English, or Japanese speech, preserves the original language,
+and generates the other two subtitle tracks locally. Audio and text stay on the
+machine.
 
-<p align="center">
-<a href="https://pypi.org/project/whisperlivekit/"><img alt="PyPI Version" src="https://img.shields.io/pypi/v/whisperlivekit?color=g"></a>
-<a href="https://pepy.tech/project/whisperlivekit"><img alt="PyPI Downloads" src="https://static.pepy.tech/personalized-badge/whisperlivekit?period=total&units=international_system&left_color=grey&right_color=brightgreen&left_text=installations"></a>
-<a href="https://pypi.org/project/whisperlivekit/"><img alt="Python Versions" src="https://img.shields.io/badge/python-3.11--3.13-dark_green"></a>
-<a href="https://huggingface.co/qfuxa/qwen3-asr-0.6b-streaming">
-  <img alt="Hugging Face models" src="https://img.shields.io/badge/🤗-Hugging%20Face%20Weights-yellow" />
-</a>
-<a href="https://github.com/QuentinFuxa/WhisperLiveKit/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache 2.0-dark_green"></a>
-</p>
+Built for **Solo Unicorn Club** on top of the open-source
+[WhisperLiveKit](https://github.com/QuentinFuxa/WhisperLiveKit) real-time speech
+engine. The original project and contributors remain credited throughout this
+repository and in the Apache 2.0 license history.
 
+## Run on a Mac
 
-### Powered by Leading Research:
+```bash
+git clone https://github.com/JesseQin123/SUC_Live_Translator.git
+cd SUC_Live_Translator
+uv sync --python 3.12 --extra funasr --extra translation --no-sources
+./scripts/conference.sh
+```
+
+Open [http://localhost:8764/conference](http://localhost:8764/conference), choose
+the meeting microphone, and click **Start**. The first run downloads the local
+speech and translation model weights; later runs use the local cache.
+
+---
+
+## WhisperLiveKit engine
+
+### Powered by leading research
 
 - Simul-[Whisper](https://arxiv.org/pdf/2406.10052)/[Streaming](https://arxiv.org/abs/2506.17077) (SOTA 2025) - Ultra-low latency transcription using [AlignAtt policy](https://arxiv.org/pdf/2305.11408). 
 - [NLLW](https://github.com/QuentinFuxa/NoLanguageLeftWaiting) (2025), based on [distilled](https://huggingface.co/entai2965/nllb-200-distilled-600M-ctranslate2) [NLLB](https://arxiv.org/abs/2207.04672) (2022, 2024) - Simulatenous translation from & to 200 languages.

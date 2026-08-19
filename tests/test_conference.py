@@ -77,6 +77,10 @@ def test_conference_ui_contains_three_tracks_and_meeting_controls():
     ):
         assert element_id in html
     assert "/conference/translate" in html
+    assert "SUC Live Translator" in html
+    assert "Solo Unicorn Club" in html
+    assert "data:image/png;base64," in html
+    assert "{{SUC_LOGO_DATA_URI}}" not in html
     assert "function latestPhrase" in html
     assert "function detectLanguage" not in html
     assert "Microphone permission timed out" in html
