@@ -1,0 +1,354 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Conference Translation</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #080b10;
+      --panel: #10151d;
+      --line: #29313d;
+      --muted: #91a0b4;
+      --text: #f7f9fc;
+      --accent: #72e0b3;
+      --subtitle-size: 42px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: radial-gradient(circle at top, #16202b 0, var(--bg) 44%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    .app { min-height: 100vh; display: grid; grid-template-rows: auto 1fr; }
+    header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 14px 18px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(8, 11, 16, .82);
+      backdrop-filter: blur(16px);
+    }
+    .brand { margin-right: auto; font-weight: 720; letter-spacing: .02em; }
+    select, button, input {
+      color: var(--text);
+      background: #18202b;
+      border: 1px solid #354052;
+      border-radius: 10px;
+      min-height: 40px;
+    }
+    select { max-width: 260px; padding: 0 12px; }
+    button { padding: 0 16px; font-weight: 650; cursor: pointer; }
+    button.primary { background: var(--accent); color: #04150e; border-color: transparent; }
+    button.primary.recording { background: #ff7d88; color: #260308; }
+    .font-control { display: flex; align-items: center; gap: 8px; color: var(--muted); }
+    #font-size { width: 110px; min-height: 0; }
+    main { display: grid; grid-template-rows: repeat(3, minmax(0, 1fr)); min-height: 0; }
+    .track {
+      display: grid;
+      grid-template-columns: minmax(92px, 11vw) 1fr;
+      align-items: center;
+      gap: clamp(16px, 3vw, 48px);
+      padding: clamp(18px, 3vh, 42px) clamp(22px, 5vw, 76px);
+      border-bottom: 1px solid var(--line);
+      background: linear-gradient(90deg, rgba(255,255,255,.025), transparent 55%);
+    }
+    .track:last-child { border-bottom: 0; }
+    .track.active { background: linear-gradient(90deg, rgba(114,224,179,.09), transparent 60%); }
+    .language { align-self: start; padding-top: 9px; color: var(--muted); font-size: 15px; font-weight: 750; letter-spacing: .08em; }
+    .subtitle {
+      font-size: var(--subtitle-size);
+      line-height: 1.28;
+      font-weight: 650;
+      letter-spacing: -.018em;
+      text-wrap: balance;
+      overflow-wrap: anywhere;
+    }
+    .subtitle.empty { color: #596579; font-weight: 520; }
+    .partial { color: #aeb9c9; font-weight: 520; }
+    .status {
+      position: fixed;
+      right: 18px;
+      bottom: 14px;
+      padding: 7px 10px;
+      border-radius: 8px;
+      color: var(--muted);
+      background: rgba(5, 8, 12, .75);
+      font-size: 13px;
+    }
+    @media (max-width: 760px) {
+      header { flex-wrap: wrap; }
+      .brand { width: 100%; }
+      .track { grid-template-columns: 1fr; gap: 5px; }
+      .language { padding-top: 0; }
+      .subtitle { font-size: min(var(--subtitle-size), 8vw); }
+    }
+    :fullscreen header { opacity: .13; transition: opacity .2s; }
+    :fullscreen header:hover { opacity: 1; }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header>
+      <div class="brand">Local Conference Translation</div>
+      <select id="microphone-select" aria-label="Microphone">
+        <option value="">Default microphone</option>
+      </select>
+      <label class="font-control">A <input id="font-size" type="range" min="26" max="72" value="42" /> A+</label>
+      <button id="fullscreen-button" type="button">Fullscreen</button>
+      <button id="record-button" class="primary" type="button">Start</button>
+    </header>
+    <main>
+      <section class="track" id="track-zh">
+        <div class="language">中文</div>
+        <div class="subtitle empty" id="subtitle-zh">等待发言…</div>
+      </section>
+      <section class="track" id="track-en">
+        <div class="language">ENGLISH</div>
+        <div class="subtitle empty" id="subtitle-en">Waiting for speech…</div>
+      </section>
+      <section class="track" id="track-ja">
+        <div class="language">日本語</div>
+        <div class="subtitle empty" id="subtitle-ja">発言を待っています…</div>
+      </section>
+    </main>
+    <div class="status" id="status">Ready</div>
+  </div>
+  <script>
+    const languages = ["zh", "en", "ja"];
+    const placeholders = { zh: "等待发言…", en: "Waiting for speech…", ja: "発言を待っています…" };
+    const microphoneSelect = document.getElementById("microphone-select");
+    const recordButton = document.getElementById("record-button");
+    const fullscreenButton = document.getElementById("fullscreen-button");
+    const fontSize = document.getElementById("font-size");
+    const statusElement = document.getElementById("status");
+    let websocket = null;
+    let recorder = null;
+    let mediaStream = null;
+    let recording = false;
+    let translationTimer = null;
+    let translationAbort = null;
+    let requestedFingerprint = "";
+    let currentSourceLanguage = null;
+    const translationCache = new Map();
+
+    function setStatus(message) { statusElement.textContent = message; }
+
+    function normalizeLanguage(value) {
+      if (!value) return null;
+      const key = String(value).trim().replaceAll("_", "-").toLowerCase();
+      if (["zh", "zh-cn", "zh-hans", "cmn", "chinese", "中文"].includes(key)) return "zh";
+      if (["en", "en-us", "en-gb", "eng", "english"].includes(key)) return "en";
+      if (["ja", "ja-jp", "jpn", "japanese", "日本語"].includes(key)) return "ja";
+      return null;
+    }
+
+    function detectLanguage(text) {
+      if (/[\u3040-\u30ff\u31f0-\u31ff]/u.test(text)) return "ja";
+      if (/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(text)) return "zh";
+      return "en";
+    }
+
+    function setTrack(language, text, { active = false, partial = "" } = {}) {
+      const track = document.getElementById(`track-${language}`);
+      const subtitle = document.getElementById(`subtitle-${language}`);
+      track.classList.toggle("active", active);
+      subtitle.classList.toggle("empty", !text && !partial);
+      subtitle.replaceChildren();
+      if (text) subtitle.append(document.createTextNode(text));
+      if (partial) {
+        if (text && !/\s$/u.test(text)) subtitle.append(document.createTextNode(" "));
+        const span = document.createElement("span");
+        span.className = "partial";
+        span.textContent = partial;
+        subtitle.append(span);
+      }
+      if (!text && !partial) subtitle.textContent = placeholders[language];
+    }
+
+    function showTranslated(result) {
+      currentSourceLanguage = result.source_language;
+      for (const language of languages) {
+        setTrack(language, result.subtitles[language] || "", {
+          active: language === currentSourceLanguage,
+        });
+      }
+    }
+
+    async function requestTranslation(text, detectedLanguage, fingerprint) {
+      const cached = translationCache.get(fingerprint);
+      if (cached) {
+        showTranslated(cached);
+        return;
+      }
+      if (translationAbort) translationAbort.abort();
+      translationAbort = new AbortController();
+      setStatus("Translating locally…");
+      try {
+        const response = await fetch("/conference/translate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, source_language: detectedLanguage }),
+          signal: translationAbort.signal,
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const result = await response.json();
+        translationCache.set(fingerprint, result);
+        if (requestedFingerprint === fingerprint) showTranslated(result);
+        setStatus("Listening");
+      } catch (error) {
+        if (error.name !== "AbortError") {
+          console.error(error);
+          setStatus("Translation unavailable; source captions continue");
+        }
+      }
+    }
+
+    function scheduleTranslation(text, detectedLanguage) {
+      if (!text) return;
+      const source = normalizeLanguage(detectedLanguage) || detectLanguage(text);
+      const fingerprint = `${source}\u0000${text}`;
+      if (fingerprint === requestedFingerprint) return;
+      requestedFingerprint = fingerprint;
+      clearTimeout(translationTimer);
+      const delay = /[.!?。！？]$/u.test(text) ? 80 : 700;
+      translationTimer = setTimeout(
+        () => requestTranslation(text, detectedLanguage, fingerprint),
+        delay,
+      );
+    }
+
+    function handleTranscript(data) {
+      if (data.status === "error") {
+        setStatus(data.error || "Transcription error");
+        return;
+      }
+      const speechLines = (data.lines || []).filter(line => line.speaker !== -2 && line.text);
+      const latest = speechLines.at(-1);
+      const committed = latest ? latest.text.trim() : "";
+      const partial = (data.buffer_transcription || "").trim();
+      const source = normalizeLanguage(latest?.detected_language)
+        || (committed || partial ? detectLanguage(committed || partial) : currentSourceLanguage);
+      if (source && (committed || partial)) {
+        setTrack(source, committed, { active: true, partial });
+        for (const language of languages) {
+          document.getElementById(`track-${language}`).classList.toggle("active", language === source);
+        }
+      }
+      if (committed) scheduleTranslation(committed, latest?.detected_language);
+    }
+
+    async function refreshMicrophones(askPermission = false) {
+      if (askPermission) {
+        const permissionStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        permissionStream.getTracks().forEach(track => track.stop());
+      }
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const microphones = devices.filter(device => device.kind === "audioinput");
+      const selected = microphoneSelect.value;
+      microphoneSelect.replaceChildren(new Option("Default microphone", ""));
+      microphones.forEach((device, index) => {
+        microphoneSelect.append(new Option(device.label || `Microphone ${index + 1}`, device.deviceId));
+      });
+      microphoneSelect.value = selected;
+    }
+
+    function websocketUrl() {
+      const protocol = location.protocol === "https:" ? "wss" : "ws";
+      return `${protocol}://${location.host}/asr?language=auto`;
+    }
+
+    function recorderOptions() {
+      const candidates = ["audio/webm;codecs=opus", "audio/webm", "audio/mp4"];
+      const mimeType = candidates.find(type => MediaRecorder.isTypeSupported(type));
+      return mimeType ? { mimeType } : undefined;
+    }
+
+    async function startRecording() {
+      setStatus("Connecting…");
+      const constraints = microphoneSelect.value
+        ? { audio: { deviceId: { exact: microphoneSelect.value }, echoCancellation: true } }
+        : { audio: { echoCancellation: true } };
+      mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
+      await refreshMicrophones(false);
+      websocket = new WebSocket(websocketUrl());
+      websocket.onmessage = event => {
+        const data = JSON.parse(event.data);
+        if (data.type === "config" && data.useAudioWorklet) {
+          setStatus("Conference page requires server mode without --pcm-input");
+          stopRecording();
+        } else if (data.type === "ready_to_stop") {
+          websocket.close();
+          setStatus("Stopped");
+        } else if (data.type === "error") {
+          setStatus(data.error || "Server error");
+        } else if (!data.type) {
+          handleTranscript(data);
+        }
+      };
+      websocket.onerror = () => setStatus("Cannot connect to local server");
+      await new Promise((resolve, reject) => {
+        websocket.onopen = resolve;
+        const prior = websocket.onerror;
+        websocket.onerror = event => { prior(event); reject(new Error("WebSocket connection failed")); };
+      });
+      recorder = new MediaRecorder(mediaStream, recorderOptions());
+      recorder.ondataavailable = event => {
+        if (event.data.size && websocket?.readyState === WebSocket.OPEN) websocket.send(event.data);
+      };
+      recorder.start(250);
+      recording = true;
+      recordButton.textContent = "Stop";
+      recordButton.classList.add("recording");
+      setStatus("Listening");
+    }
+
+    async function stopRecording() {
+      if (recorder && recorder.state !== "inactive") {
+        await new Promise(resolve => {
+          recorder.addEventListener("stop", resolve, { once: true });
+          recorder.stop();
+        });
+      }
+      if (websocket?.readyState === WebSocket.OPEN) websocket.send(new ArrayBuffer(0));
+      mediaStream?.getTracks().forEach(track => track.stop());
+      recorder = null;
+      mediaStream = null;
+      recording = false;
+      recordButton.textContent = "Start";
+      recordButton.classList.remove("recording");
+      setStatus("Finishing last phrase…");
+    }
+
+    recordButton.addEventListener("click", async () => {
+      recordButton.disabled = true;
+      try {
+        if (recording) await stopRecording();
+        else await startRecording();
+      } catch (error) {
+        console.error(error);
+        mediaStream?.getTracks().forEach(track => track.stop());
+        recording = false;
+        recordButton.textContent = "Start";
+        recordButton.classList.remove("recording");
+        setStatus("Microphone or server unavailable");
+      } finally {
+        recordButton.disabled = false;
+      }
+    });
+    fullscreenButton.addEventListener("click", () => {
+      if (document.fullscreenElement) document.exitFullscreen();
+      else document.documentElement.requestFullscreen();
+    });
+    fontSize.addEventListener("input", () => {
+      document.documentElement.style.setProperty("--subtitle-size", `${fontSize.value}px`);
+    });
+    navigator.mediaDevices?.addEventListener?.("devicechange", () => refreshMicrophones(false));
+    refreshMicrophones(false).catch(() => {});
+  </script>
+</body>
+</html>

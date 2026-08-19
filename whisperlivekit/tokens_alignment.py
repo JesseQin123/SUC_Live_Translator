@@ -44,6 +44,9 @@ class TokensAlignment:
     ) -> None:
         self.state = state
         self.diarization = args.diarization
+        self.split_on_language_change = bool(
+            getattr(args, "conference_mode", False)
+        )
 
         self.all_tokens: List[ASRToken] = []
         self.all_diarization_segments: List[SpeakerSegment] = []
@@ -459,6 +462,18 @@ class TokensAlignment:
                             end=end_silence
                         ))
                 else:
+                    if (
+                        self.split_on_language_change
+                        and self.current_line_tokens
+                        and token.detected_language
+                        and self.current_line_tokens[-1].detected_language
+                        and token.detected_language
+                        != self.current_line_tokens[-1].detected_language
+                    ):
+                        self.validated_segments.append(
+                            Segment.from_tokens(self.current_line_tokens)
+                        )
+                        self.current_line_tokens = []
                     self.current_line_tokens.append(token)
 
             segments = list(self.validated_segments)

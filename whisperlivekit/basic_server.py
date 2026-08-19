@@ -5,11 +5,27 @@ import os
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from fastapi import FastAPI, File, Form, Request, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import (
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+    WebSocket,
+    WebSocketDisconnect,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
+from pydantic import BaseModel
 
-from whisperlivekit import AudioProcessor, TranscriptionEngine, get_inline_ui_html, parse_args
+from whisperlivekit import (
+    AudioProcessor,
+    TranscriptionEngine,
+    get_conference_ui_html,
+    get_inline_ui_html,
+    parse_args,
+)
 from whisperlivekit.api_auth import websocket_token
 from whisperlivekit.config import parse_cors_origins
 from whisperlivekit.timed_objects import FrontData
@@ -21,6 +37,7 @@ logger.setLevel(logging.DEBUG)
 
 config = parse_args()
 transcription_engine = None
+conference_translator = None
 
 _API_TOKEN = getattr(config, "api_token", None) or os.environ.get("WLK_API_TOKEN") or None
 
@@ -41,9 +58,20 @@ def _bearer_token(request: Request) -> Optional[str]:
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global transcription_engine
+    global conference_translator, transcription_engine
     transcription_engine = TranscriptionEngine(config=config)
-    yield
+    if config.conference_mode:
+        from whisperlivekit.conference import build_conference_translator
+
+        logger.info("Loading local conference translation model...")
+        conference_translator = await asyncio.to_thread(
+            build_conference_translator, config
+        )
+        logger.info("Conference translation is ready at /conference")
+    try:
+        yield
+    finally:
+        conference_translator = None
 
 app = FastAPI(lifespan=lifespan)
 app.add_middleware(
@@ -59,6 +87,42 @@ async def get():
     return HTMLResponse(get_inline_ui_html())
 
 
+@app.get("/conference")
+async def conference():
+    return HTMLResponse(get_conference_ui_html())
+
+
+class ConferenceTranslationRequest(BaseModel):
+    text: str
+    source_language: Optional[str] = None
+
+
+@app.post("/conference/translate")
+async def conference_translate(
+    payload: ConferenceTranslationRequest,
+    request: Request,
+):
+    """Translate one stable phrase into local zh/en/ja subtitle tracks."""
+    if not _token_ok(_bearer_token(request)):
+        raise HTTPException(status_code=401, detail="invalid or missing API token")
+    if conference_translator is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Start the server with --conference-mode to load local translation.",
+        )
+    try:
+        result = await conference_translator.translate(
+            payload.text,
+            payload.source_language,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        logger.exception("Conference translation failed")
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
+    return JSONResponse(result.to_dict())
+
+
 @app.get("/health")
 async def health():
     """Health check endpoint."""
@@ -68,6 +132,7 @@ async def health():
         "status": "ok",
         "backend": backend,
         "ready": transcription_engine is not None,
+        "conference_ready": conference_translator is not None,
     })
 
 

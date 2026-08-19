@@ -71,6 +71,33 @@ wlk rm large-v3                        # Delete a model
 wlk bench
 ```
 
+#### Local Chinese / English / Japanese conference mode
+
+Conference mode reuses the normal streaming ASR connection and adds a large,
+three-track local UI. The spoken language may switch between Chinese, English,
+and Japanese. The source track is preserved and only the other two tracks are
+translated. No cloud API is used.
+
+Install the Apple Silicon ASR and local translation extras with Python 3.12:
+
+```bash
+uv sync --python 3.12 --extra voxtral-mlx --extra translation --no-sources
+```
+
+Start the local server:
+
+```bash
+./scripts/conference.sh
+```
+
+Then open [http://localhost:8000/conference](http://localhost:8000/conference),
+choose a microphone, and click **Start**. The first start downloads and caches
+the open model weights; later starts can run offline.
+
+The conference page expects the normal MediaRecorder input mode, so do not add
+`--pcm-input`. Add normal server arguments after the script name when needed,
+for example `./scripts/conference.sh --port 9000`.
+
 #### API Compatibility
 
 WhisperLiveKit exposes compatibility-oriented subsets of popular APIs:

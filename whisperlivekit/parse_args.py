@@ -25,6 +25,16 @@ def parse_args():
         ),
     )
     parser.add_argument(
+        "--conference-mode",
+        action="store_true",
+        default=False,
+        dest="conference_mode",
+        help=(
+            "Load local NLLB translation for the /conference three-track "
+            "Chinese/English/Japanese interface."
+        ),
+    )
+    parser.add_argument(
         "--api-token",
         type=str,
         default=None,

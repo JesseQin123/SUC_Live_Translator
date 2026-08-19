@@ -13,6 +13,18 @@ def get_web_interface_html():
         logger.error(f"Error loading web interface HTML: {e}")
         return "<html><body><h1>Error loading interface</h1></body></html>"
 
+
+def get_conference_ui_html():
+    """Load the self-contained three-language conference interface."""
+    try:
+        with resources.files('whisperlivekit.web').joinpath('conference.html').open(
+            'r', encoding='utf-8'
+        ) as f:
+            return f.read()
+    except Exception as e:
+        logger.error(f"Error loading conference interface: {e}")
+        return "<html><body><h1>Error loading conference interface</h1></body></html>"
+
 def get_inline_ui_html():
     """Returns the complete web interface HTML with all assets embedded in a single call."""
     try:

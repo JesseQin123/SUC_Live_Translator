@@ -302,6 +302,11 @@ def print_banner(config, host: str, port: int, ssl: bool = False):
         f"  Accelerator: {_gpu_info()}",
         "",
         f"  Web UI:       {base_url}/",
+        *(
+            [f"  Conference:   {base_url}/conference"]
+            if getattr(config, "conference_mode", False)
+            else []
+        ),
         f"  WebSocket:    {ws_url}/asr",
         f"  Deepgram:     {ws_url}/v1/listen",
         f"  REST API:     {base_url}/v1/audio/transcriptions",
