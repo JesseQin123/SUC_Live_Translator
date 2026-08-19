@@ -4,26 +4,28 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+
+def _load_html_resource(filename, error_heading):
+    try:
+        with resources.files("whisperlivekit.web").joinpath(filename).open(
+            "r", encoding="utf-8"
+        ) as file:
+            return file.read()
+    except Exception as exc:
+        logger.error("Error loading %s: %s", filename, exc)
+        return f"<html><body><h1>{error_heading}</h1></body></html>"
+
+
 def get_web_interface_html():
     """Loads the HTML for the web interface using importlib.resources."""
-    try:
-        with resources.files('whisperlivekit.web').joinpath('live_transcription.html').open('r', encoding='utf-8') as f:
-            return f.read()
-    except Exception as e:
-        logger.error(f"Error loading web interface HTML: {e}")
-        return "<html><body><h1>Error loading interface</h1></body></html>"
+    return _load_html_resource("live_transcription.html", "Error loading interface")
 
 
 def get_conference_ui_html():
     """Load the self-contained three-language conference interface."""
-    try:
-        with resources.files('whisperlivekit.web').joinpath('conference.html').open(
-            'r', encoding='utf-8'
-        ) as f:
-            return f.read()
-    except Exception as e:
-        logger.error(f"Error loading conference interface: {e}")
-        return "<html><body><h1>Error loading conference interface</h1></body></html>"
+    return _load_html_resource(
+        "conference.html", "Error loading conference interface"
+    )
 
 def get_inline_ui_html():
     """Returns the complete web interface HTML with all assets embedded in a single call."""

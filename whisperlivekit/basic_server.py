@@ -17,7 +17,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 from whisperlivekit import (
     AudioProcessor,
@@ -27,6 +27,7 @@ from whisperlivekit import (
     parse_args,
 )
 from whisperlivekit.api_auth import websocket_token
+from whisperlivekit.conference import TranslationSuperseded
 from whisperlivekit.config import parse_cors_origins
 from whisperlivekit.timed_objects import FrontData
 
@@ -93,7 +94,7 @@ async def conference():
 
 
 class ConferenceTranslationRequest(BaseModel):
-    text: str
+    text: str = Field(min_length=1, max_length=2000)
     source_language: Optional[str] = None
 
 
@@ -115,6 +116,8 @@ async def conference_translate(
             payload.text,
             payload.source_language,
         )
+    except TranslationSuperseded as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
     except RuntimeError as exc:

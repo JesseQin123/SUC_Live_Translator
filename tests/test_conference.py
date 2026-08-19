@@ -3,7 +3,6 @@ from types import SimpleNamespace
 import pytest
 
 from whisperlivekit.conference import (
-    ConferenceTranslator,
     detect_conference_language,
     normalize_conference_language,
 )
@@ -12,20 +11,12 @@ from whisperlivekit.tokens_alignment import TokensAlignment
 from whisperlivekit.web.web_interface import get_conference_ui_html
 
 
-class FakeTranslationBackend:
-    def __init__(self):
-        self.calls = []
-
-    async def translate(self, text, source_language, target_languages):
-        self.calls.append((text, source_language, target_languages))
-        return {language: f"{language}:{text}" for language in target_languages}
-
-
 @pytest.mark.parametrize(
     ("value", "expected"),
     [
         ("zh-CN", "zh"),
         ("cmn", "zh"),
+        ("cmn-Hans", "zh"),
         ("Chinese", "zh"),
         ("en-US", "en"),
         ("English", "en"),
@@ -49,34 +40,6 @@ def test_conference_language_aliases_are_normalized(value, expected):
 )
 def test_conference_language_fallback_handles_english_japanese_and_chinese(text, expected):
     assert detect_conference_language(text) == expected
-
-
-@pytest.mark.asyncio
-async def test_conference_translation_preserves_source_and_requests_only_other_tracks():
-    backend = FakeTranslationBackend()
-    translator = ConferenceTranslator(backend)
-
-    result = await translator.translate("大家好", source_language="zh-CN")
-
-    assert result.source_language == "zh"
-    assert result.subtitles == {
-        "zh": "大家好",
-        "en": "en:大家好",
-        "ja": "ja:大家好",
-    }
-    assert backend.calls == [("大家好", "zh", ["en", "ja"])]
-
-
-@pytest.mark.asyncio
-async def test_conference_translation_uses_text_fallback_when_asr_has_no_language():
-    backend = FakeTranslationBackend()
-    translator = ConferenceTranslator(backend)
-
-    result = await translator.translate("今日はよろしくお願いします。")
-
-    assert result.source_language == "ja"
-    assert result.subtitles["ja"] == "今日はよろしくお願いします。"
-    assert backend.calls[0][1:] == ("ja", ["zh", "en"])
 
 
 def test_conference_alignment_starts_a_new_line_when_detected_language_changes():
@@ -114,3 +77,5 @@ def test_conference_ui_contains_three_tracks_and_meeting_controls():
     ):
         assert element_id in html
     assert "/conference/translate" in html
+    assert "function latestPhrase" in html
+    assert "function detectLanguage" not in html

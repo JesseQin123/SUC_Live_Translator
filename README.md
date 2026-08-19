@@ -78,10 +78,10 @@ three-track local UI. The spoken language may switch between Chinese, English,
 and Japanese. The source track is preserved and only the other two tracks are
 translated. No cloud API is used.
 
-Install the Apple Silicon ASR and local translation extras with Python 3.12:
+Install the multilingual ASR and local translation extras with Python 3.12:
 
 ```bash
-uv sync --python 3.12 --extra voxtral-mlx --extra translation --no-sources
+uv sync --python 3.12 --extra funasr --extra translation --no-sources
 ```
 
 Start the local server:
@@ -93,6 +93,10 @@ Start the local server:
 Then open [http://localhost:8000/conference](http://localhost:8000/conference),
 choose a microphone, and click **Start**. The first start downloads and caches
 the open model weights; later starts can run offline.
+
+Conference mode uses SenseVoice's language tag on every turn, so Chinese,
+English, and Japanese speakers can alternate automatically. A short pause at a
+speaker handoff gives the clearest split between subtitle turns.
 
 The conference page expects the normal MediaRecorder input mode, so do not add
 `--pcm-input`. Add normal server arguments after the script name when needed,

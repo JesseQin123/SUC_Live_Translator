@@ -138,21 +138,6 @@
 
     function setStatus(message) { statusElement.textContent = message; }
 
-    function normalizeLanguage(value) {
-      if (!value) return null;
-      const key = String(value).trim().replaceAll("_", "-").toLowerCase();
-      if (["zh", "zh-cn", "zh-hans", "cmn", "chinese", "中文"].includes(key)) return "zh";
-      if (["en", "en-us", "en-gb", "eng", "english"].includes(key)) return "en";
-      if (["ja", "ja-jp", "jpn", "japanese", "日本語"].includes(key)) return "ja";
-      return null;
-    }
-
-    function detectLanguage(text) {
-      if (/[\u3040-\u30ff\u31f0-\u31ff]/u.test(text)) return "ja";
-      if (/[\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff]/u.test(text)) return "zh";
-      return "en";
-    }
-
     function setTrack(language, text, { active = false, partial = "" } = {}) {
       const track = document.getElementById(`track-${language}`);
       const subtitle = document.getElementById(`subtitle-${language}`);
@@ -195,6 +180,7 @@
           body: JSON.stringify({ text, source_language: detectedLanguage }),
           signal: translationAbort.signal,
         });
+        if (response.status === 409) return;
         if (!response.ok) throw new Error(await response.text());
         const result = await response.json();
         translationCache.set(fingerprint, result);
@@ -208,16 +194,25 @@
       }
     }
 
+    function latestPhrase(text) {
+      const characters = Array.from(text.trim());
+      if (characters.length <= 400) return characters.join("");
+      const tail = characters.slice(-400).join("");
+      const boundary = tail.search(/[.!?。！？]\s*/u);
+      return (boundary >= 0 ? tail.slice(boundary + 1) : tail).trim();
+    }
+
     function scheduleTranslation(text, detectedLanguage) {
-      if (!text) return;
-      const source = normalizeLanguage(detectedLanguage) || detectLanguage(text);
-      const fingerprint = `${source}\u0000${text}`;
+      const phrase = latestPhrase(text);
+      if (!phrase) return;
+      const source = languages.includes(detectedLanguage) ? detectedLanguage : "auto";
+      const fingerprint = `${source}\u0000${phrase}`;
       if (fingerprint === requestedFingerprint) return;
       requestedFingerprint = fingerprint;
       clearTimeout(translationTimer);
-      const delay = /[.!?。！？]$/u.test(text) ? 80 : 700;
+      const delay = /[.!?。！？]$/u.test(phrase) ? 80 : 700;
       translationTimer = setTimeout(
-        () => requestTranslation(text, detectedLanguage, fingerprint),
+        () => requestTranslation(phrase, detectedLanguage, fingerprint),
         delay,
       );
     }
@@ -231,8 +226,9 @@
       const latest = speechLines.at(-1);
       const committed = latest ? latest.text.trim() : "";
       const partial = (data.buffer_transcription || "").trim();
-      const source = normalizeLanguage(latest?.detected_language)
-        || (committed || partial ? detectLanguage(committed || partial) : currentSourceLanguage);
+      const source = languages.includes(latest?.detected_language)
+        ? latest.detected_language
+        : currentSourceLanguage;
       if (source && (committed || partial)) {
         setTrack(source, committed, { active: true, partial });
         for (const language of languages) {

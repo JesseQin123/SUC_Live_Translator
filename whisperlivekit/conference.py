@@ -9,7 +9,6 @@ import asyncio
 import logging
 import re
 import threading
-from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Optional
 
@@ -81,21 +80,14 @@ class ConferenceTranslation:
         }
 
 
-class TranslationBackend(ABC):
-    @abstractmethod
-    async def translate(
-        self,
-        text: str,
-        source_language: str,
-        target_languages: list[str],
-    ) -> dict[str, str]:
-        """Translate one committed source phrase into the requested tracks."""
+class TranslationSuperseded(RuntimeError):
+    """Raised when a newer live-caption request replaces queued work."""
 
 
 class ConferenceTranslator:
     """Route a committed phrase to all three conference subtitle tracks."""
 
-    def __init__(self, backend: TranslationBackend):
+    def __init__(self, backend):
         self.backend = backend
 
     async def translate(
@@ -115,9 +107,7 @@ class ConferenceTranslator:
 
         missing = [language for language in targets if not translated.get(language)]
         if missing:
-            raise RuntimeError(
-                "Translation backend omitted track(s): " + ", ".join(missing)
-            )
+            raise RuntimeError("Translation backend omitted track(s): " + ", ".join(missing))
 
         subtitles = {source: normalized_text, **translated}
         return ConferenceTranslation(
@@ -126,37 +116,48 @@ class ConferenceTranslator:
         )
 
 
-class NllbConferenceBackend(TranslationBackend):
+class NllbConferenceBackend:
     """Generate two NLLB targets while sharing one locally loaded model."""
 
     def __init__(self, translation_model):
         self.model = translation_model
         self._lock = threading.Lock()
+        self._request_lock = threading.Lock()
+        self._latest_request_id = 0
 
     async def translate(self, text, source_language, target_languages):
+        with self._request_lock:
+            self._latest_request_id += 1
+            request_id = self._latest_request_id
         return await asyncio.to_thread(
             self._translate_sync,
             text,
             source_language,
             target_languages,
+            request_id,
         )
 
-    def _translate_sync(self, text, source_language, target_languages):
+    def _ensure_latest(self, request_id):
+        with self._request_lock:
+            if request_id != self._latest_request_id:
+                raise TranslationSuperseded("A newer conference subtitle replaced this request.")
+
+    def _translate_sync(self, text, source_language, target_languages, request_id):
         source_code = _NLLB_CODES[source_language]
         target_codes = [_NLLB_CODES[language] for language in target_languages]
         tokenizer = self.model.get_tokenizer(source_code)
         with self._lock:
+            # Coalesce browser updates while an older inference is running. At
+            # most one stale translation can consume model time; queued stale
+            # requests exit here instead of building an uncancellable backlog.
+            self._ensure_latest(request_id)
             if self.model.backend_type == "ctranslate2":
-                outputs = self._translate_ctranslate2(
-                    text, tokenizer, target_codes
-                )
+                outputs = self._translate_ctranslate2(text, tokenizer, target_codes, request_id)
             else:
-                outputs = self._translate_transformers(
-                    text, tokenizer, target_codes
-                )
+                outputs = self._translate_transformers(text, tokenizer, target_codes, request_id)
         return dict(zip(target_languages, outputs))
 
-    def _translate_transformers(self, text, tokenizer, target_codes):
+    def _translate_transformers(self, text, tokenizer, target_codes, request_id):
         import torch
 
         model = self.model.translator
@@ -171,6 +172,7 @@ class NllbConferenceBackend(TranslationBackend):
         outputs = []
         with torch.inference_mode():
             for target_code in target_codes:
+                self._ensure_latest(request_id)
                 target_id = tokenizer.convert_tokens_to_ids(target_code)
                 generated = model.generate(
                     **encoded,
@@ -178,12 +180,11 @@ class NllbConferenceBackend(TranslationBackend):
                     max_new_tokens=256,
                     num_beams=1,
                 )
-                outputs.append(
-                    tokenizer.decode(generated[0], skip_special_tokens=True).strip()
-                )
+                outputs.append(tokenizer.decode(generated[0], skip_special_tokens=True).strip())
         return outputs
 
-    def _translate_ctranslate2(self, text, tokenizer, target_codes):
+    def _translate_ctranslate2(self, text, tokenizer, target_codes, request_id):
+        self._ensure_latest(request_id)
         encoded = tokenizer(text, truncation=True, max_length=512)
         source_tokens = tokenizer.convert_ids_to_tokens(encoded["input_ids"])
         results = self.model.translator.translate_batch(
@@ -207,9 +208,7 @@ def build_conference_translator(config) -> ConferenceTranslator:
     try:
         from nllw import load_model
     except ImportError as exc:
-        raise ImportError(
-            'Conference mode requires NLLW. Install `whisperlivekit[translation]`.'
-        ) from exc
+        raise ImportError("Conference mode requires NLLW. Install `whisperlivekit[translation]`.") from exc
 
     backend_name = getattr(config, "nllb_backend", "transformers")
     model = load_model(
